@@ -1,0 +1,18 @@
+import { chromium } from '@playwright/test';
+const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'/home/tunabel/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome',args:['--no-sandbox','--enable-unsafe-swiftshader']});
+const page=await browser.newPage({viewport:{width:1440,height:1000},deviceScaleFactor:1});
+const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+await page.goto('http://localhost:3000/',{waitUntil:'networkidle'});
+await page.getByText('Model ready',{exact:false}).waitFor({timeout:60000});
+await page.screenshot({path:'/tmp/thehouse-exterior.png'});
+await page.getByRole('button',{name:'Floor plan',exact:true}).click();
+await page.screenshot({path:'/tmp/thehouse-ground-plan.png'});
+await page.getByRole('button',{name:/02 Attic floor/}).click();
+await page.screenshot({path:'/tmp/thehouse-attic-plan.png'});
+await page.getByRole('button',{name:'Walk',exact:true}).click();
+await page.getByRole('button',{name:'Start walking',exact:true}).click();
+await page.waitForTimeout(400);
+await page.screenshot({path:'/tmp/thehouse-attic-walk.png'});
+await page.keyboard.press('Escape');
+console.log(JSON.stringify({errors,title:await page.title(),canvas:await page.locator('canvas').count()},null,2));
+await browser.close();
