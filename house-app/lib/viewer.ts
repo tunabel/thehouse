@@ -28,8 +28,9 @@ export function createViewer(container:HTMLDivElement,onState:(s:ViewerState)=>v
   const fill=new THREE.DirectionalLight('#d9e5f0',.65);fill.position.set(20,12,-8);scene.add(fill);
   const player=new THREE.Vector3(9.92,.19,8.2);let yaw=0,pitch=0;
   const state:ViewerState={mode:'orbit',floor:0,roof:true,isolated:false,locked:false,room:'Entire house',fps:60,position:[9.92,.19,8.2]};
-  const keys=new Set<string>();let disposed=false,raf=0,last=performance.now(),lastReport=0,frames=0;
-  function emit(){onState({...state,position:[player.x,player.y,player.z]});}
+  const keys=new Set<string>();let disposed=false,raf=0,last=performance.now(),lastReport=0,frames=0,needsRender=true;
+  // The structure and lights are fixed. Idle comparison panes do not need 60 redraws/sec.
+  function emit(){needsRender=true;onState({...state,position:[player.x,player.y,player.z]});}
   function visibility(){
     house.floors.forEach((g,i)=>g.visible=!state.isolated||i===state.floor);
     house.ceilings.forEach(g=>g.visible=state.mode==='walk'||(!state.isolated&&state.roof));
@@ -41,7 +42,7 @@ export function createViewer(container:HTMLDivElement,onState:(s:ViewerState)=>v
   function unLock(){if(document.pointerLockElement===renderer.domElement)document.exitPointerLock();keys.clear();}
   function syncWalkCamera(){camera.position.set(player.x,player.y+EYE_HEIGHT,player.z);camera.rotation.order='YXZ';camera.rotation.set(pitch,yaw,0);}
   function spawn(f:number){const l=LEVELS[f];player.set(l.spawn[0],l.elevation,l.spawn[1]);yaw=0;pitch=0;syncWalkCamera();}
-  const resize=()=>{const w=container.clientWidth,h=container.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();const extent=12;ortho.left=-extent*w/h;ortho.right=extent*w/h;ortho.top=extent;ortho.bottom=-extent;ortho.updateProjectionMatrix();};
+  const resize=()=>{const w=container.clientWidth,h=container.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();const extent=12;ortho.left=-extent*w/h;ortho.right=extent*w/h;ortho.top=extent;ortho.bottom=-extent;ortho.updateProjectionMatrix();if(state.isolated&&state.mode==='orbit')setFloor(state.floor);};
   const ro=new ResizeObserver(resize);ro.observe(container);resize();home();
   function setMode(mode:ViewMode){
     unLock();state.mode=mode;controls.enabled=mode==='orbit';
@@ -50,7 +51,7 @@ export function createViewer(container:HTMLDivElement,onState:(s:ViewerState)=>v
     else {state.isolated=false;home();}
     visibility();emit();
   }
-  function setFloor(f:number){unLock();state.floor=f;if(state.mode==='walk')spawn(f);else{state.isolated=true;if(state.mode==='orbit'){const y=LEVELS[f].elevation;camera.position.set(23,y+16,22);controls.target.set(8.465,y+.4,4);controls.update();}}visibility();emit();}
+  function setFloor(f:number){unLock();state.floor=f;if(state.mode==='walk')spawn(f);else{state.isolated=true;if(state.mode==='orbit'){const y=LEVELS[f].elevation;controls.target.set(8.465,y+.4,4);camera.position.set(23,y+16,22).sub(controls.target).multiplyScalar(Math.max(1,1.3/camera.aspect)).add(controls.target);controls.update();}}visibility();emit();}
   function reset(){state.floor=0;state.roof=true;state.isolated=false;setMode('orbit');}
   function enter(){if(state.mode!=='walk')setMode('walk');renderer.domElement.focus();const p=renderer.domElement.requestPointerLock();p?.catch(()=>emit());}
   const lockChange=()=>{state.locked=document.pointerLockElement===renderer.domElement;if(!state.locked)keys.clear();emit();};
@@ -66,9 +67,11 @@ export function createViewer(container:HTMLDivElement,onState:(s:ViewerState)=>v
       if(state.locked){let forward=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown'));let side=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));const len=Math.hypot(forward,side);if(len){forward/=len;side/=len;const speed=keys.has('ShiftLeft')||keys.has('ShiftRight')?3.2:1.85;movePlayer(player,(side*Math.cos(yaw)-forward*Math.sin(yaw))*speed*dt,(-forward*Math.cos(yaw)-side*Math.sin(yaw))*speed*dt,house.colliders);}}
       if(!Number.isFinite(player.x+player.y+player.z)||supportHeight(player.x,player.z,player.y)===null||!canOccupy(player.x,player.y,player.z,house.colliders))spawn(state.floor);
       syncWalkCamera();state.floor=LEVELS.reduce((best,l,i)=>Math.abs(player.y-l.elevation)<Math.abs(player.y-LEVELS[best].elevation)?i:best,0);
-      const l=LEVELS[state.floor];const room=[...l.rooms].reverse().find(r=>player.x>=r.bounds[0]&&player.x<=r.bounds[2]&&player.z>=r.bounds[1]&&player.z<=r.bounds[3]);state.room=room?.name??(player.x<0?'Garage':player.z>9?'Outside':'Staircase');
-    }else controls.update();
-    renderer.render(scene,state.mode==='plan'?ortho:camera);frames++;
+      const l=LEVELS[state.floor];const room=[...l.rooms].reverse().find(r=>(r.regions??[r.bounds]).some(b=>player.x>=b[0]&&player.x<=b[2]&&player.z>=b[1]&&player.z<=b[3]));state.room=room?.name??(player.x<0?'Garage':player.z>9?'Outside':'Staircase');
+    }
+    const changed=state.mode==='walk'||controls.update();
+    if(changed||needsRender){renderer.render(scene,state.mode==='plan'?ortho:camera);needsRender=false;}
+    frames++;
     if(now-lastReport>1000){state.fps=Math.round(frames*1000/(now-lastReport));frames=0;lastReport=now;emit();}
     raf=requestAnimationFrame(tick);
   }

@@ -5,10 +5,11 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console'
 await page.goto('http://localhost:3000/',{waitUntil:'networkidle'});
 await page.getByText('Model ready',{exact:false}).waitFor({timeout:60000});
 await page.screenshot({path:'/tmp/thehouse-exterior.png'});
-await page.getByRole('button',{name:'Floor plan',exact:true}).click();
+await page.getByRole('button',{name:'Compare plans',exact:true}).click();
 await page.screenshot({path:'/tmp/thehouse-ground-plan.png'});
-await page.getByRole('button',{name:/02 Attic floor/}).click();
+await page.getByRole('group',{name:'Comparison floor'}).getByRole('button',{name:'DG',exact:true}).click();
 await page.screenshot({path:'/tmp/thehouse-attic-plan.png'});
+await page.getByRole('button',{name:'Close comparison'}).click();
 await page.getByRole('button',{name:'Walk',exact:true}).click();
 await page.getByRole('button',{name:'Start walking',exact:true}).click();
 await page.waitForTimeout(400);

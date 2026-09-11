@@ -19,6 +19,8 @@ npm run dev
 
 Open the local address printed by the server. No Blender installation is required. The application is local-only; source references are not deployed.
 
+For the comparison view, keep `blueprint.pdf` in the repository root and run `npm run references` from `house-app` (requires Poppler). This creates ignored local sheet images. **Compare plans** shows the original drawing and dimensioned digital plan beside the selected 3D floor; Close or Escape returns to the explorer. See `MODEL_NOTES.md` for traced measurements and remaining stair limitations.
+
 ## Milestones
 
 1. Fixed house structure, desktop walkthrough, and source-comparable digital blueprints.

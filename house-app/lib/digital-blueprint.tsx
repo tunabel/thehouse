@@ -1,41 +1,46 @@
-import { LEVELS, LIFT, STAIR, WIDTH, type Level, type Opening, type Wall } from './house-data';
-
-const scale=1;
-function openingPoint(w:Wall,o:Opening){
-  const alongX=Math.abs(w.b[0]-w.a[0])>Math.abs(w.b[1]-w.a[1]);
-  const t=(o.offset+o.width/2)*scale;
-  return alongX?[w.a[0]+t,w.a[1]]:[w.a[0],w.a[1]+t];
+'use client';
+import { useState } from 'react';
+import { FOOTPRINT, LEVELS, LIFT, STAIR, WIDTH, type Wall } from './house-data';
+const number=(n:number)=>Number(n.toFixed(3)).toString();
+function Dimension({a,b,y}:{a:number;b:number;y:number}){
+  return <g className="bp-dimension"><path d={`M ${a} ${y-.12} v .24 M ${a} ${y} H ${b} M ${b} ${y-.12} v .24`}/><text x={(a+b)/2} y={y-.1}>{number(b-a)}</text></g>;
 }
-function WallLine({wall}:{wall:Wall}){
-  return <g>
-    <line className={wall.exterior?'bp-wall bp-exterior':'bp-wall'} x1={wall.a[0]} y1={wall.a[1]} x2={wall.b[0]} y2={wall.b[1]}/>
-    {wall.openings.map((opening,i)=>{
-      const [x,y]=openingPoint(wall,opening);const alongX=Math.abs(wall.b[0]-wall.a[0])>Math.abs(wall.b[1]-wall.a[1]);
-      return <g key={i}>
-        <line className="bp-opening" x1={alongX?x-opening.width/2:x} y1={alongX?y:y-opening.width/2} x2={alongX?x+opening.width/2:x} y2={alongX?y:y+opening.width/2}/>
-        {opening.kind==='door'&&<circle className="bp-door" cx={x} cy={y} r={opening.width/2}/>} 
-      </g>;
-    })}
+function WallLine({wall:w}:{wall:Wall}){
+  const horizontal=Math.abs(w.b[0]-w.a[0])>Math.abs(w.b[1]-w.a[1]);
+  const length=Math.hypot(w.b[0]-w.a[0],w.b[1]-w.a[1]);
+  const point=(t:number)=>[w.a[0]+(horizontal?t:0),w.a[1]+(horizontal?0:t)];
+  let cursor=0;const solids: [number,number][]=[];
+  for(const o of [...w.openings].sort((a,b)=>a.offset-b.offset)){solids.push([cursor,o.offset]);cursor=o.offset+o.width;}
+  solids.push([cursor,length]);
+  return <g><title>{w.id} · thickness {number(w.thickness)} m</title>
+    {solids.filter(([a,b])=>b>a).map(([a,b])=>{const p=point(a),q=point(b);return <line key={a} className="bp-wall" style={{strokeWidth:w.thickness}} x1={p[0]} y1={p[1]} x2={q[0]} y2={q[1]}/>;})}
+    {w.openings.map((o,i)=>{const p=point(o.offset),q=point(o.offset+o.width),x=(p[0]+q[0])/2,y=(p[1]+q[1])/2;return <g key={i}>
+      {o.kind==='window'?<line className="bp-window" x1={p[0]} y1={p[1]} x2={q[0]} y2={q[1]}/>:o.kind==='door'?<path className="bp-door" d={horizontal?`M ${p[0]} ${p[1]} v ${o.width} A ${o.width} ${o.width} 0 0 0 ${q[0]} ${q[1]}`:`M ${p[0]} ${p[1]} h ${o.width} A ${o.width} ${o.width} 0 0 1 ${q[0]} ${q[1]}`}/>:null}
+      <text className="bp-opening-label" transform={`translate(${x+(horizontal?0:.24)} ${y+(horizontal?-.25:0)}) rotate(${horizontal?0:-90})`}>{number(o.width)}</text>
+    </g>;})}
   </g>;
 }
-function roomCenter(bounds:[number,number,number,number]){return [(bounds[0]+bounds[2])/2,(bounds[1]+bounds[3])/2] as const;}
 export function DigitalBlueprint({floor}:{floor:number}){
-  const level:Level=LEVELS[floor];
-  const title=`Digital ${level.name} blueprint`;
-  return <section className="blueprint" aria-label={title}>
-    <div className="blueprint-head"><div><span className="eyebrow">MEASURED MODEL / DIGITAL BLUEPRINT</span><h2>{level.name}</h2></div><span>{level.short} · 1:100 reference</span></div>
-    <svg viewBox="-4 -2 25 14" role="img" aria-label={`${title}, generated from the same room and wall data as the 3D model`}>
-      <rect className="bp-paper" x="-4" y="-2" width="25" height="14"/>
-      {level.rooms.map(room=>{const [x,y]=roomCenter(room.bounds);return <g key={room.id}><rect className={`bp-room ${room.finish}`} x={room.bounds[0]} y={room.bounds[1]} width={room.bounds[2]-room.bounds[0]} height={room.bounds[3]-room.bounds[1]}/><text className="bp-room-name" x={x} y={y-.12}>{room.name}</text><text className="bp-room-ref" x={x} y={y+.18}>{room.original}</text></g>;})}
-      {floor===0&&<g><rect className="bp-garage" x="-3.6" y="0" width="3.6" height="8"/><text className="bp-room-name" x="-1.8" y="3.8">Garage</text><text className="bp-room-ref" x="-1.8" y="4.1">G 01 · 26.36 m²</text></g>}
-      {level.walls.map(wall=><WallLine key={wall.id} wall={wall}/>) }
-      <rect className="bp-lift" x={LIFT[0]} y={LIFT[1]} width={LIFT[2]-LIFT[0]} height={LIFT[3]-LIFT[1]}/>
-      <text className="bp-core-label" x={(LIFT[0]+LIFT[2])/2} y={(LIFT[1]+LIFT[3])/2}>Lift<tspan x={(LIFT[0]+LIFT[2])/2} dy=".28">1.67 × 2.41 m</tspan></text>
-      <path className="bp-stair" d={`M ${STAIR.x0} ${STAIR.z1} L ${STAIR.x1} ${STAIR.z1} L ${STAIR.x1} ${STAIR.turnStart+.36} Q ${STAIR.x1} ${STAIR.turnStart} ${STAIR.x0+.15} ${STAIR.turnStart} L ${STAIR.x0} ${STAIR.turnStart}`}/>
-      <text className="bp-core-label" x={(STAIR.x0+STAIR.x1)/2} y="7.4">Turning stair</text>
-      <g className="bp-dimension"><line x1="0" y1="-1.15" x2={WIDTH} y2="-1.15"/><line x1="0" y1="-1.35" x2="0" y2="-.95"/><line x1={WIDTH} y1="-1.35" x2={WIDTH} y2="-.95"/><text x={WIDTH/2} y="-1.3">16.93 m overall width</text></g>
-      {floor===0&&<text className="bp-note" x="-3.25" y="8.65">Garage connection · 1.00 m T30 door</text>}
-    </svg>
-    <p>Room boundaries, openings, lift clearance, and stair envelope come from the same building data used by the 3D model.</p>
+  const level=LEVELS[floor], [zoom,setZoom]=useState(1),[details,setDetails]=useState(false);
+  const chains=floor===1?[0,.365,6.455,6.58,10.35,10.475,12.09,12.24,16.565,WIDTH]:[0,6.215,6.58,10.35,10.715,WIDTH];
+  return <section className="blueprint" aria-label={`Digital ${level.name} blueprint`}>
+    <header className="comparison-pane-head"><strong>Digital plan · {level.short}</strong><div><button onClick={()=>setZoom(Math.max(1,zoom-.5))} aria-label="Zoom out digital plan">−</button><button onClick={()=>setZoom(Math.min(4,zoom+.5))} aria-label="Zoom in digital plan">+</button><button onClick={()=>setDetails(!details)} aria-expanded={details}>Dimensions</button></div></header>
+    <div className="plan-scroll"><svg style={{width:`${zoom*100}%`,height:zoom===1?'100%':'auto'}} viewBox="-4.3 -3 23.7 14.7" role="img" aria-label={`${level.short} walls, door swings, windows and dimensions in metres`}>
+      <polygon points={FOOTPRINT.map(p=>p.join(',')).join(' ')} fill="#f6f4ed"/>
+      {level.rooms.map(r=><g key={r.id}>{(r.regions??[r.bounds]).map((b,i)=><rect key={i} x={b[0]} y={b[1]} width={b[2]-b[0]} height={b[3]-b[1]} fill={r.finish==='tile'?'#e9eee7':'#f2ede3'}/>)}</g>)}
+      {floor===0&&<><rect x="-3.6" y="0" width="3.6" height="8" fill="#e7e5de" stroke="#405044" strokeWidth=".12"/><text className="bp-room-name" x="-1.8" y="3">Garage</text><text className="bp-room-ref" x="-1.8" y="3.4">26.36 m² (sheet)</text><Dimension a={-3.6} b={0} y={9.8}/></>}
+      {level.walls.map(w=><WallLine key={w.id} wall={w}/>)}
+      {level.rooms.map(r=>{const b=r.bounds,x=(b[0]+b[2])/2,y=(b[1]+b[3])/2;return <g key={r.id}><text className="bp-room-name" x={x} y={y-.18}>{r.original}</text><text className="bp-room-ref" x={x} y={y+.13}>{r.area?`${number(r.area)} m² (sheet)`:`${number(b[2]-b[0])} × ${number(b[3]-b[1])} m*`}</text></g>;})}
+      <rect x={LIFT[0]} y={LIFT[1]} width={LIFT[2]-LIFT[0]} height={LIFT[3]-LIFT[1]} fill="#dce4df"/>
+      <text className="bp-core-label" x={(LIFT[0]+LIFT[2])/2} y={(LIFT[1]+LIFT[3])/2}>Lift<tspan x={(LIFT[0]+LIFT[2])/2} dy=".3">{number(LIFT[2]-LIFT[0])} × {number(LIFT[3]-LIFT[1])}</tspan></text>
+      <rect x={STAIR.x0} y={STAIR.z0} width={STAIR.x1-STAIR.x0} height={STAIR.z1-STAIR.z0} fill="none" stroke="#8a7560" strokeWidth=".025" strokeDasharray=".1 .06"/>
+      <text className="bp-core-label" transform={`translate(${STAIR.x0+.35} 6.8) rotate(-90)`}>Stair · approximate</text>
+      <Dimension a={0} b={WIDTH} y={-2.45}/>
+      {chains.slice(0,-1).map((a,i)=><Dimension key={a} a={a} b={chains[i+1]} y={i%2===0?-1.8:-2.1}/>)}
+      <Dimension a={0} b={6.075} y={9.8}/><Dimension a={6.075} b={10.855} y={9.8}/><Dimension a={10.855} b={WIDTH} y={9.8}/>
+      <g transform="translate(18.1 0) rotate(90)"><Dimension a={-1.25} b={9} y={-.65}/><Dimension a={0} b={8} y={0}/><Dimension a={-1.25} b={0} y={.6}/><Dimension a={8} b={9} y={.6}/></g>
+      <text className="bp-note" x="7" y="10.65">Dimensions: model metres · areas marked “sheet”: source annotations</text>
+    </svg></div>
+    {details&&<div className="dimension-table"><p>Coordinates and openings below are model values. Traced positions remain approximate; compare with the original above. Room extents are bounding dimensions, not surveyed clear dimensions.</p><table aria-label="Room dimensions"><thead><tr><th>Room</th><th>Model extents (m)</th><th>Source area (m²)</th></tr></thead><tbody>{level.rooms.map(r=><tr key={r.id}><td>{r.original}</td><td>{number(r.bounds[2]-r.bounds[0])} × {number(r.bounds[3]-r.bounds[1])}</td><td>{r.area??'—'}</td></tr>)}</tbody></table><table aria-label="Wall dimensions"><thead><tr><th>Wall</th><th>Start (x, z)</th><th>End (x, z)</th><th>Thickness</th><th>Openings</th></tr></thead><tbody>{level.walls.map(w=><tr key={w.id}><td>{w.id}</td><td>{w.a.map(number).join(', ')}</td><td>{w.b.map(number).join(', ')}</td><td>{number(w.thickness)}</td><td>{w.openings.map(o=>`${o.kind} ${number(o.width)}`).join('; ')||'—'}</td></tr>)}</tbody></table></div>}
   </section>;
 }

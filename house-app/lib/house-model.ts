@@ -138,7 +138,7 @@ export function buildHouse(): HouseModel {
       // Studio bathroom has its own patch, applied after the studio.
       if(room.id==='studio')bounds=[.365,.365,6.2,7.635];
       const cuts:Rect[]=[LIFT,...(i>0?[[STAIR.x0,STAIR.z0,STAIR.x1,STAIR.z1] as Rect]:[])];
-      let pieces:Rect[]=[bounds];
+      let pieces:Rect[]=room.regions??[bounds];
       for(const cut of cuts)pieces=pieces.flatMap(r=>{
         const x0=Math.max(r[0],cut[0]),z0=Math.max(r[1],cut[1]),x1=Math.min(r[2],cut[2]),z1=Math.min(r[3],cut[3]);
         if(x1<=x0||z1<=z0)return [r];
@@ -191,7 +191,7 @@ export function buildHouse(): HouseModel {
   }
   // Closed lift door panels on each landing, separate from the static shaft surfaces.
   LEVELS.forEach((l,i)=>{
-    for(const dx of [-.22,.22])addBox(floors[i],`${l.id}/lift-door-${dx}`,8.575+dx,l.elevation+1.05,7.557,.425,2.1,.018,mats.dark);
+    for(const dx of [-.22,.22])addBox(floors[i],`${l.id}/lift-door-${dx}`,(LIFT[0]+LIFT[2])/2+dx,l.elevation+1.05,LIFT[3]+.19,.425,2.1,.018,mats.dark);
   });
   // Garage: north/left side, 3.60 m wide by 8 m deep.
   const garage=floors[0];
