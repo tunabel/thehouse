@@ -4,9 +4,18 @@ import { atticCeiling, inFootprint, inRect, type Collider } from './house-model'
 
 export const EYE_HEIGHT=1.65;
 export const RADIUS=.18;
+export function isOnStair(x:number,z:number) {
+  const lower=inRect(x,z,[STAIR.x0,STAIR.turnStart,STAIR.x1,STAIR.z1]);
+  // Quarter-turn landing at the top of the flight, narrowing toward the west exit.
+  const turn=inRect(x,z,[STAIR.x0,STAIR.turnStart-.24,7.24,STAIR.turnStart+.53])&&x<=7.24-(z-STAIR.turnStart+.24)*.7;
+  return lower||turn;
+}
 export function stairHeight(x:number,z:number,floor:number) {
-  if(!inRect(x,z,[STAIR.x0,STAIR.z0,STAIR.x1,STAIR.z1]))return null;
-  const t=(STAIR.z1-z)/(STAIR.z1-STAIR.z0);
+  if(!isOnStair(x,z))return null;
+  const straightFraction=12/STAIR.steps;
+  const t=z>=STAIR.turnStart
+    ? ((STAIR.z1-z)/(STAIR.z1-STAIR.turnStart))*straightFraction
+    : straightFraction+((7.24-x)/.8)*(1-straightFraction);
   return LEVELS[floor].elevation+t*(LEVELS[floor+1].elevation-LEVELS[floor].elevation);
 }
 export function supportHeight(x:number,z:number,previous:number):number|null {
@@ -34,7 +43,7 @@ export function canOccupy(x:number,y:number,z:number,colliders:Collider[]) {
     if((x-nearX)**2+(z-nearZ)**2<RADIUS**2)return false;
   }
   if(y>6.1&&inFootprint(x,z)&&y+EYE_HEIGHT+.07>atticCeiling(x,z))return false;
-  const onStair=inRect(x,z,[STAIR.x0,STAIR.z0,STAIR.x1,STAIR.z1]);
+  const onStair=isOnStair(x,z);
   if(!onStair&&inFootprint(x,z))for(const l of LEVELS.slice(0,2)){const c=l.elevation+l.height;if(y<c-.1&&y+EYE_HEIGHT+.07>c)return false;}
   return true;
 }
